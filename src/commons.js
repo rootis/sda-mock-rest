@@ -3,7 +3,7 @@ export const CORS = (
   res,
   next
 ) => {
-  res.header("Access-Control-Allow-Origin", "localhost");
+  res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "*");
   next();
 };
