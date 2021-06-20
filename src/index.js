@@ -23,20 +23,27 @@ app.get('/api/people/:id', function (req, res) {
 
 app.post('/api/people', function (req, res) {
 	const people = getPeople();
+	let person = null;
 	if (req.body.id) {
 		const index = people.findIndex(p => p.id === parseInt(req.body.id));
-		const person = people[index];
+		person = people[index];
 		for (const key in req.body) {
 			person[key] = req.body[key];
 		}
-		res.json(person);
 	} else {
 		let maxId = people.reduce((max, p) => p.id > max ? p.id : max, people[0].id);
-		const person = { id: maxId + 1, ...req.body };
+		person = { id: maxId + 1, ...req.body };
 		people.push(person);
-		res.json(person);
 	}
+	let maxCarId = -1;
+	people.forEach(p => {
+		if (p && p.cars) {
+			p.cars.forEach(c => maxCarId = (c && c.id && c.id > maxCarId) ? c.id : maxCarId)
+		}
+	});
+	person.cars.forEach(c => c.id = c.id ? c.id : ++maxCarId);
 	savePeople(people);
+	res.json(person);
 });
 
 app.delete('/api/people/:id', function (req, res) {
