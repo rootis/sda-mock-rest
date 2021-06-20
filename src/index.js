@@ -22,12 +22,21 @@ app.get('/api/people/:id', function (req, res) {
 });
 
 app.post('/api/people', function (req, res) {
-    const people = getPeople();
-    let maxId = people.reduce((max, p) => p.id > max ? p.id : max, people[0].id);
-    const result = { id: maxId + 1, ...req.body };
-    people.push(result);
-    savePeople(people);
-    res.json(result);
+	const people = getPeople();
+	if (req.body.id) {
+		const index = people.findIndex(p => p.id === parseInt(req.body.id));
+		const person = people[index];
+		for (const key in req.body) {
+			person[key] = req.body[key];
+		}
+		res.json(person);
+	} else {
+		let maxId = people.reduce((max, p) => p.id > max ? p.id : max, people[0].id);
+		const person = { id: maxId + 1, ...req.body };
+		people.push(person);
+		res.json(person);
+	}
+	savePeople(people);
 });
 
 app.delete('/api/people/:id', function (req, res) {
