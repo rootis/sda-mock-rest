@@ -1,3 +1,5 @@
+import fs from 'fs';
+
 export const CORS = (
   _req,
   res,
@@ -8,3 +10,6 @@ export const CORS = (
   res.header("Access-Control-Allow-Methods", "*");
   next();
 };
+
+export const loadDataFromFile = file => JSON.parse(fs.readFileSync(file));
+export const saveDataToFile = (file, data) => fs.writeFileSync(file, JSON.stringify(data));
