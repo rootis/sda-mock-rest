@@ -2,52 +2,84 @@ import express from "express";
 import { json, urlencoded } from "body-parser";
 import fs from 'fs';
 
-import { CORS } from "./commons";
+import { CORS, loadDataFromFile, saveDataToFile } from "./commons";
 
 const app = express();
 app.use(urlencoded({ extended: false }));
 app.use(json());
 app.use(CORS);
 
-const getPeople = () => JSON.parse(fs.readFileSync('data/people.json'));
-const savePeople = people => fs.writeFileSync('data/people.json', JSON.stringify(people));
+const loadUsers = () => loadDataFromFile('data/users.json');
+const saveUsers = users => saveDataToFile('data/users.json', users);
 
-app.get('/api/people', function (_req, res) {
-    res.json({ people: getPeople() });
+const loadDevices = () => loadDataFromFile('data/devices.json');
+const saveDevices = users => saveDataToFile('data/devices.json', users);
+
+app.get('/api/users', function (_req, res) {
+    res.json({ users: loadUsers() });
 });
 
-app.get('/api/people/:id', function (req, res) {
-	const person = getPeople().find(p => p.id === parseInt(req.params.id));
-    res.json({ person });
+app.get('/api/users/:id', function (req, res) {
+	const user = loadUsers().find(u => u.id === parseInt(req.params.id));
+    res.json({ user });
 });
 
-app.post('/api/people', function (req, res) {
-	const people = getPeople();
-	let person = null;
-	if (req.body.id) {
-		const index = people.findIndex(p => p.id === parseInt(req.body.id));
-		person = people[index];
-		for (const key in req.body) {
-			person[key] = req.body[key];
+app.post('/api/users', function ({ body }, res) {
+	const users = loadUsers();
+
+	let user = null;
+	if (body.id) {
+		const index = users.findIndex(u => u.id === parseInt(body.id));
+		user = users[index];
+		for (const key in body) {
+			user[key] = body[key];
 		}
 	} else {
-		let maxId = people.reduce((max, p) => p.id > max ? p.id : max, people[0].id);
-		person = { id: maxId + 1, ...req.body };
-		people.push(person);
+		let maxId = users.reduce((max, u) => u.id > max ? u.id : max, users?.[0]?.id || 0);
+		user = { id: maxId + 1, ...body };
+		users.push(user);
 	}
-	let maxCarId = -1;
-	people.forEach(p => {
-		if (p && p.cars) {
-			p.cars.forEach(c => maxCarId = (c && c.id && c.id > maxCarId) ? c.id : maxCarId)
-		}
-	});
-	person.cars.forEach(c => c.id = c.id ? c.id : ++maxCarId);
-	savePeople(people);
-	res.json(person);
+	saveUsers(users);
+
+	res.json(user);
 });
 
-app.delete('/api/people/:id', function (req, res) {
-    savePeople(getPeople().filter(({ id }) => id !== parseInt(req.params.id)));
+app.delete('/api/users/:id', function (req, res) {
+    saveUsers(loadUsers().filter(({ id }) => id !== parseInt(req.params.id)));
+    res.json({ success: 'deteled' });
+});
+
+app.get('/api/devices', function (_req, res) {
+    res.json({ devices: loadDevices() });
+});
+
+app.get('/api/devices/:id', function (req, res) {
+	const device = loadDevices().find(d => d.id === parseInt(req.params.id));
+    res.json({ device });
+});
+
+app.post('/api/devices', function ({ body }, res) {
+	const devices = loadDevices();
+
+	let device = null;
+	if (body.id) {
+		const index = devices.findIndex(d => d.id === parseInt(body.id));
+		device = devices[index];
+		for (const key in body) {
+			device[key] = body[key];
+		}
+	} else {
+		let maxId = devices.reduce((max, d) => d.id > max ? d.id : max, devices?.[0]?.id || 0);
+		device = { id: maxId + 1, ...body };
+		devices.push(device);
+	}
+	saveDevices(devices);
+
+	res.json(device);
+});
+
+app.delete('/api/devices/:id', function (req, res) {
+    saveDevices(loadDevices().filter(({ id }) => id !== parseInt(req.params.id)));
     res.json({ success: 'deteled' });
 });
 
