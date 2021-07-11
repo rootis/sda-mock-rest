@@ -1,58 +1,128 @@
 import express from "express";
 import { json, urlencoded } from "body-parser";
-import fs from 'fs';
+import { sha256 } from "js-sha256";
+import jwt from "njwt";
 
-import { CORS } from "./commons";
+import { CORS, loadDataFromFile, saveDataToFile } from "./commons";
+
+const SECRET = 'aPd_6f-Q+5a#7s6!f5a8s';
 
 const app = express();
 app.use(urlencoded({ extended: false }));
 app.use(json());
 app.use(CORS);
 
-const getPeople = () => JSON.parse(fs.readFileSync('data/people.json'));
-const savePeople = people => fs.writeFileSync('data/people.json', JSON.stringify(people));
+const loadUsers = () => loadDataFromFile('data/users.json');
+const saveUsers = users => saveDataToFile('data/users.json', users);
 
-app.get('/api/people', function (_req, res) {
-    res.json({ people: getPeople() });
-});
+const loadMovies = () => loadDataFromFile('data/movies.json');
 
-app.get('/api/people/:id', function (req, res) {
-	const person = getPeople().find(p => p.id === parseInt(req.params.id));
-    res.json({ person });
-});
+const loadUserMovies = () => loadDataFromFile('data/user-movies.json');
+const saveUserMovies = movies => saveDataToFile('data/user-movies.json', movies);
 
-app.post('/api/people', function (req, res) {
-	const people = getPeople();
-	let person = null;
-	if (req.body.id) {
-		const index = people.findIndex(p => p.id === parseInt(req.body.id));
-		person = people[index];
-		for (const key in req.body) {
-			person[key] = req.body[key];
-		}
-	} else {
-		let maxId = people.reduce((max, p) => p.id > max ? p.id : max, people[0].id);
-		person = { id: maxId + 1, ...req.body };
-		people.push(person);
+const getUserId = email => loadUsers().find(u => u.email === email)?.id;
+
+const secure = (req, res, callback) => {
+	const token = req.get('Authorization');
+	if (!token || !token.startsWith('Bearer ')) {
+		console.error("Invalid token: ", token);
+		return res.status(403).json({ error: "Unauthorized" });
 	}
-	let maxCarId = -1;
-	people.forEach(p => {
-		if (p && p.cars) {
-			p.cars.forEach(c => maxCarId = (c && c.id && c.id > maxCarId) ? c.id : maxCarId)
+
+	jwt.verify(token.substring(7), SECRET, (err, verifiedJwt) => {
+		if (err) {
+			console.error("Token error: ", err);
+			res.status(403).json({ error: "Invalid token" });
+		} else {
+			callback(getUserId(verifiedJwt.body.email));
 		}
 	});
-	person.cars.forEach(c => c.id = c.id ? c.id : ++maxCarId);
-	savePeople(people);
-	res.json(person);
+};
+
+app.get('/api/movies', function (_req, res) {
+	res.json({ movies: loadMovies() });
 });
 
-app.delete('/api/people/:id', function (req, res) {
-    savePeople(getPeople().filter(({ id }) => id !== parseInt(req.params.id)));
-    res.json({ success: 'deteled' });
+app.get('/api/my-movies', function (req, res) {
+	secure(req, res, userId => {
+		const userMovies = loadUserMovies();
+
+		if (!userMovies[userId] || Object.keys(userMovies[userId]).length <= 0) {
+			return res.json({ movies: [] });
+		}
+
+		res.json({ movies: loadMovies().filter(m => userMovies[userId][m.id]) });
+	});
+});
+
+app.post('/api/my-movies/:movieId', function (req, res) {
+	secure(req, res, userId => {
+		const userMovies = loadUserMovies();
+		
+		if (!userMovies[userId]) {
+			userMovies[userId] = {};
+		}
+
+		userMovies[userId][req.params.movieId] = true;
+		saveUserMovies(userMovies);
+		
+		res.json({ success: "saved" });
+	});
+});
+
+app.delete('/api/my-movies/:movieId', function (req, res) {
+	secure(req, res, userId => {
+		const userMovies = loadUserMovies();
+		
+		if (!userMovies[userId]) {
+			userMovies[userId] = {};
+		}
+
+		delete userMovies[userId][req.params.movieId];
+		saveUserMovies(userMovies);
+		
+		res.json({ success: "removed" });
+	});
+});
+
+app.post('/api/login', function ({ body }, res) {
+	const users = loadUsers();
+
+	const user = users.find(u => u.email === body.email);
+	if (!user || user.password !== sha256(body.password)) {
+		console.error("Invalid credentials: ", body);
+		return res.status(401).json({ error: "Error" });
+	}
+
+	const token = jwt.create({ email: user.email }, SECRET);
+	token.setExpiration(new Date().getTime() + 60 * 60 * 1000);
+
+	res.json({ userId: user.id, token: token.compact() });
+});
+
+app.post('/api/sign-up', function ({ body }, res) {
+	const users = loadUsers();
+
+	const existing = users.find(u => u.email === body.email);
+	if (!body.username || !body.password || !body.email || existing) {
+		console.error('Invalid user data: ', body);
+		return res.status(400).json({ error: "Error" });
+	}
+
+	const maxId = users.reduce((max, u) => u.id > max ? u.id : max, users?.[0]?.id || 0);
+	const { password, ...others } = body;
+	const user = { id: maxId + 1, password: sha256(password), ...others };
+	users.push(user);
+
+	saveUsers(users);
+
+	delete user.password;
+
+	res.json(user);
 });
 
 app.listen(3000, () => {
-    console.log("App started");
+	console.log("App started");
 });
 
 export default app;

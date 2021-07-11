@@ -21,6 +21,8 @@
   "homepage": "https://github.com/rootis/sda-mock-rest#readme",
   "dependencies": {
     "body-parser": "1.19.0",
-    "express": "4.17.1"
+    "express": "4.17.1",
+    "js-sha256": "0.9.0",
+    "njwt": "1.1.0"
   }
 }
