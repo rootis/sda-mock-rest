@@ -18,6 +18,7 @@ const loadUsers = () => loadDataFromFile('data/users.json');
 const saveUsers = users => saveDataToFile('data/users.json', users);
 
 const loadMovies = () => loadDataFromFile('data/movies.json');
+const saveMovies = movies => saveDataToFile('data/movies.json', movies);
 
 const loadUserMovies = () => loadDataFromFile('data/user-movies.json');
 const saveUserMovies = movies => saveDataToFile('data/user-movies.json', movies);
@@ -43,6 +44,31 @@ const secure = (req, res, callback) => {
 
 app.get('/api/movies', function (_req, res) {
 	res.json({ movies: loadMovies() });
+});
+
+app.post('/api/movies', function ({ body }, res) {
+	const movies = loadMovies();
+
+	let movie = null;
+	if (body.id) {
+		const index = movies.findIndex(m => m.id === parseInt(body.id));
+		movie = movies[index];
+		for (const key in body) {
+			movie[key] = body[key];
+		}
+	} else {
+		let maxId = movies.reduce((max, m) => m.id > max ? m.id : max, movies?.[0]?.id || 0);
+		movie = { id: maxId + 1, ...body };
+		movies.push(movie);
+	}
+	saveMovies(movies);
+
+	res.json(movie);
+});
+
+app.delete('/api/movies/:id', function (req, res) {
+    saveMovies(loadMovies().filter(({ id }) => id !== parseInt(req.params.id)));
+    res.json({ success: 'deteled' });
 });
 
 app.get('/api/my-movies', function (req, res) {
