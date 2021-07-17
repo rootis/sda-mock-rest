@@ -1,9 +1,11 @@
 import express from "express";
-import { json, urlencoded } from "body-parser";
+import bodyParser from "body-parser";
 import { sha256 } from "js-sha256";
 import jwt from "njwt";
 
 import { CORS, loadDataFromFile, saveDataToFile } from "./commons";
+
+const { json, urlencoded } = bodyParser;
 
 const SECRET = 'aPd_6f-Q+5a#7s6!f5a8s';
 
