@@ -78,6 +78,11 @@ app.post('/api/events', function ({ body }, res) {
 	res.json(event);
 });
 
+app.get('/api/events/:id', function (req, res) {
+	const event = loadEvents().find(e => e.id === parseInt(req.params.id));
+	res.json({ event });
+});
+
 app.delete('/api/events/:id', function (req, res) {
 	saveEvents(loadEvents().filter(({ id }) => id !== parseInt(req.params.id)));
 	res.json({ success: 'deteled' });
