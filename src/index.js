@@ -1,9 +1,13 @@
 import express from "express";
 import bodyParser from "body-parser";
+import { sha256 } from "js-sha256";
+import jwt from "njwt";
 
 import { CORS, loadDataFromFile, saveDataToFile } from "./commons";
 
 const { json, urlencoded } = bodyParser;
+
+const SECRET = 'aPd_6f-Q+5a#7s6!f5a8s';
 
 const app = express();
 app.use(urlencoded({ extended: false }));
@@ -28,6 +32,25 @@ const saveDevices = users => saveDataToFile('data/devices.json', users);
 
 const loadEvents = () => loadDataFromFile('data/events.json');
 const saveEvents = events => saveDataToFile('data/events.json', events);
+
+const getUserId = email => loadUsers().find(u => u.email === email)?.id;
+
+const secure = (req, res, callback) => {
+	const token = req.get('Authorization');
+	if (!token || !token.startsWith('Bearer ')) {
+		console.error("Invalid token: ", token);
+		return res.status(403).json({ error: "Unauthorized" });
+	}
+
+	jwt.verify(token.substring(7), SECRET, (err, verifiedJwt) => {
+		if (err) {
+			console.error("Token error: ", err);
+			res.status(403).json({ error: "Invalid token" });
+		} else {
+			callback(getUserId(verifiedJwt.body.email, verifiedJwt.body.role));
+		}
+	});
+};
 
 const generateRandomEvents = () => {
 	const rand = Math.floor(Math.random() * 10);
@@ -98,23 +121,36 @@ app.get('/api/users/:id', function (req, res) {
 });
 
 app.post('/api/users', function ({ body }, res) {
-	const users = loadUsers();
+	secure(req, res, (_userId, role) => {
+		if (role === 'admin') {
+			const users = loadUsers();
 
-	let user = null;
-	if (body.id) {
-		const index = users.findIndex(u => u.id === parseInt(body.id));
-		user = users[index];
-		for (const key in body) {
-			user[key] = body[key];
+			let user = null;
+			if (body.id) {
+				const index = users.findIndex(u => u.id === parseInt(body.id));
+				user = users[index];
+				for (const key in body) {
+					if (key === 'password') {
+						user[key] = sha256(body[key]);
+					} else {
+						user[key] = body[key];
+					}
+				}
+			} else {
+				let maxId = users.reduce((max, u) => u.id > max ? u.id : max, users?.[0]?.id || 0);
+				user = { id: maxId + 1, ...body };
+				if (user.password) {
+					user.password = sha256(user.password);
+				}
+				users.push(user);
+			}
+			saveUsers(users);
+
+			res.json(user);
+		} else {
+			res.status(403).json({ error: "Unauthorized" });
 		}
-	} else {
-		let maxId = users.reduce((max, u) => u.id > max ? u.id : max, users?.[0]?.id || 0);
-		user = { id: maxId + 1, ...body };
-		users.push(user);
-	}
-	saveUsers(users);
-
-	res.json(user);
+	});
 });
 
 app.delete('/api/users/:id', function (req, res) {
@@ -122,8 +158,10 @@ app.delete('/api/users/:id', function (req, res) {
 	res.json({ success: 'deteled' });
 });
 
-app.get('/api/devices', function (_req, res) {
-	res.json({ devices: loadDevices() });
+app.get('/api/devices', function (req, res) {
+	secure(req, res, () => {
+		res.json({ devices: loadDevices() });
+	});
 });
 
 app.get('/api/devices/:id', function (req, res) {
@@ -154,6 +192,42 @@ app.post('/api/devices', function ({ body }, res) {
 app.delete('/api/devices/:id', function (req, res) {
 	saveDevices(loadDevices().filter(({ id }) => id !== parseInt(req.params.id)));
 	res.json({ success: 'deteled' });
+});
+
+app.post('/api/login', function ({ body }, res) {
+	const users = loadUsers();
+
+	const user = users.find(u => u.email === body.email);
+	if (!user || user.password !== sha256(body.password)) {
+		console.error("Invalid credentials: ", body);
+		return res.status(401).json({ error: "Error" });
+	}
+
+	const token = jwt.create({ email: user.email, role: user.role }, SECRET);
+	token.setExpiration(new Date().getTime() + 60 * 60 * 1000);
+
+	res.json({ userId: user.id, role: user.role, token: token.compact() });
+});
+
+app.post('/api/sign-up', function ({ body }, res) {
+	const users = loadUsers();
+
+	const existing = users.find(u => u.email === body.email);
+	if (!body.username || !body.password || !body.email || existing) {
+		console.error('Invalid user data: ', body);
+		return res.status(400).json({ error: "Error" });
+	}
+
+	const maxId = users.reduce((max, u) => u.id > max ? u.id : max, users?.[0]?.id || 0);
+	const { password, ...others } = body;
+	const user = { id: maxId + 1, password: sha256(password), ...others };
+	users.push(user);
+
+	saveUsers(users);
+
+	delete user.password;
+
+	res.json(user);
 });
 
 app.listen(3000, () => {
