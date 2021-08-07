@@ -47,7 +47,7 @@ const secure = (req, res, callback) => {
 			console.error("Token error: ", err);
 			res.status(403).json({ error: "Invalid token" });
 		} else {
-			callback(getUserId(verifiedJwt.body.email, verifiedJwt.body.role));
+			callback(getUserId(verifiedJwt.body.email), verifiedJwt.body.role);
 		}
 	});
 };
