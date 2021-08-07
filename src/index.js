@@ -120,9 +120,10 @@ app.get('/api/users/:id', function (req, res) {
 	res.json({ user });
 });
 
-app.post('/api/users', function ({ body }, res) {
+app.post('/api/users', function (req, res) {
 	secure(req, res, (_userId, role) => {
 		if (role === 'admin') {
+			const { body } = req;
 			const users = loadUsers();
 
 			let user = null;
